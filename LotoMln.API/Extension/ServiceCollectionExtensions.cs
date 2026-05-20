@@ -62,6 +62,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<IRoomService, RoomService>();
         services.AddScoped<ICardGeneratorService, CardGeneratorService>();
+        services.AddScoped<IGameEngineService, GameEngineService>();      
+        services.AddScoped<IKinhVerifierService, KinhVerifierService>();
 
         // AutoMapper: scan assembly chứa GameMappingProfile
         services.AddAutoMapper(typeof(GameMappingProfile).Assembly);
