@@ -1,12 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using LotoMln.Models.Entities;
 
-namespace LotoMln.DataAccess.IRepositories
+namespace LotoMln.DataAccess.IRepositories;
+
+public interface ICardRepository
 {
-    internal interface ICardRepository
-    {
-    }
+    Task<Card?> GetByIdAsync(Guid id, CancellationToken ct = default);
+    Task<List<Card>> GetByRoomCodeAsync(string roomCode, CancellationToken ct = default);
+    Task<List<Card>> GetAvailableAsync(string roomCode, CancellationToken ct = default);
+    Task AddAsync(Card card, CancellationToken ct = default);
+    Task AddRangeAsync(IEnumerable<Card> cards, CancellationToken ct = default);
+    void Update(Card card);
 }

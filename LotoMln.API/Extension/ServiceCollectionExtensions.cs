@@ -1,5 +1,8 @@
 ﻿using LotoMln.DataAccess.DBContext;
+using LotoMln.DataAccess.IRepositories;
+using LotoMln.DataAccess.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace LotoMln.API.Extension;
 
@@ -14,12 +17,16 @@ public static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException(
                 "Postgres connection string not found. Set via User Secrets.");
 
+        // Build NpgsqlDataSource với dynamic JSON enabled.
+        // Cần thiết để serialize int[][], List<int>, string[] sang cột jsonb.
+        var dataSourceBuilder = new NpgsqlDataSourceBuilder(connString);
+        dataSourceBuilder.EnableDynamicJson();
+        var dataSource = dataSourceBuilder.Build();
+
         services.AddDbContext<AppDbContext>(opt =>
         {
-            opt.UseNpgsql(connString, npg =>
-            {
-                npg.MigrationsAssembly(typeof(AppDbContext).Assembly.GetName().Name);
-            });
+            opt.UseNpgsql(dataSource, npg =>
+                npg.MigrationsAssembly(typeof(AppDbContext).Assembly.GetName().Name));
 
             if (env.IsDevelopment())
             {
@@ -27,6 +34,23 @@ public static class ServiceCollectionExtensions
                 opt.EnableSensitiveDataLogging();
             }
         });
+
+        return services;
+    }
+
+    public static IServiceCollection AddRepositories(this IServiceCollection services)
+    {
+        services.AddScoped<IRoomRepository, RoomRepository>();
+        services.AddScoped<IPlayerRepository, PlayerRepository>();
+        services.AddScoped<ICardRepository, CardRepository>();
+        services.AddScoped<IQuestionRepository, QuestionRepository>();
+        services.AddScoped<IQuestionSlotRepository, QuestionSlotRepository>();
+        services.AddScoped<IGameStateRepository, GameStateRepository>();
+        services.AddScoped<ICalledNumberRepository, CalledNumberRepository>();
+        services.AddScoped<IStealAttemptRepository, StealAttemptRepository>();
+        services.AddScoped<IKinhClaimRepository, KinhClaimRepository>();
+
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
 
         return services;
     }

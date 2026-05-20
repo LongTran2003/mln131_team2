@@ -1,12 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using LotoMln.Models.Entities;
 
-namespace LotoMln.DataAccess.IRepositories
+namespace LotoMln.DataAccess.IRepositories;
+
+public interface IRoomRepository
 {
-    internal interface IRoomRepository
-    {
-    }
+    Task<Room?> GetByCodeAsync(string code, CancellationToken ct = default);
+    Task<Room?> GetWithDetailsAsync(string code, CancellationToken ct = default);
+    Task<bool> ExistsAsync(string code, CancellationToken ct = default);
+    Task AddAsync(Room room, CancellationToken ct = default);
+    void Update(Room room);
+    void Remove(Room room);
 }
