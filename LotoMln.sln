@@ -1,0 +1,49 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36518.9
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LotoMln.API", "LotoMln.API.csproj", "{6DCC6951-392B-43CF-BE07-F497C1863793}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LotoMln.Models", "..\LotoMln.Models\LotoMln.Models.csproj", "{EEDC464E-92CC-4764-8A0B-824BA945D9DE}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LotoMln.DataAccess", "..\LotoMln.DataAccess\LotoMln.DataAccess.csproj", "{3AF0F8F0-D7CB-4CD8-9EE8-732F21E1639B}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LotoMln.Services", "..\LotoMln.Services\LotoMln.Services.csproj", "{2ED3CF56-D701-4663-92FA-61E8E45EA390}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LotoMln.Utilities", "..\LotoMln.Utilities\LotoMln.Utilities.csproj", "{5F7BB295-178C-4A57-86D1-90FFCD26D5E0}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6DCC6951-392B-43CF-BE07-F497C1863793}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6DCC6951-392B-43CF-BE07-F497C1863793}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6DCC6951-392B-43CF-BE07-F497C1863793}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6DCC6951-392B-43CF-BE07-F497C1863793}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EEDC464E-92CC-4764-8A0B-824BA945D9DE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EEDC464E-92CC-4764-8A0B-824BA945D9DE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EEDC464E-92CC-4764-8A0B-824BA945D9DE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EEDC464E-92CC-4764-8A0B-824BA945D9DE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3AF0F8F0-D7CB-4CD8-9EE8-732F21E1639B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3AF0F8F0-D7CB-4CD8-9EE8-732F21E1639B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3AF0F8F0-D7CB-4CD8-9EE8-732F21E1639B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3AF0F8F0-D7CB-4CD8-9EE8-732F21E1639B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2ED3CF56-D701-4663-92FA-61E8E45EA390}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2ED3CF56-D701-4663-92FA-61E8E45EA390}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2ED3CF56-D701-4663-92FA-61E8E45EA390}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2ED3CF56-D701-4663-92FA-61E8E45EA390}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F7BB295-178C-4A57-86D1-90FFCD26D5E0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F7BB295-178C-4A57-86D1-90FFCD26D5E0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F7BB295-178C-4A57-86D1-90FFCD26D5E0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F7BB295-178C-4A57-86D1-90FFCD26D5E0}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A4FD3D98-F594-44FE-8566-5905A04E6128}
+	EndGlobalSection
+EndGlobal
