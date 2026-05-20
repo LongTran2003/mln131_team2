@@ -1,6 +1,9 @@
 ﻿using LotoMln.DataAccess.DBContext;
 using LotoMln.DataAccess.IRepositories;
 using LotoMln.DataAccess.Repositories;
+using LotoMln.Services.IServices;
+using LotoMln.Services.Mapping;
+using LotoMln.Services.Services;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
@@ -51,6 +54,17 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IKinhClaimRepository, KinhClaimRepository>();
 
         services.AddScoped<IUnitOfWork, UnitOfWork>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddGameServices(this IServiceCollection services)
+    {
+        services.AddScoped<IRoomService, RoomService>();
+        services.AddScoped<ICardGeneratorService, CardGeneratorService>();
+
+        // AutoMapper: scan assembly chứa GameMappingProfile
+        services.AddAutoMapper(typeof(GameMappingProfile).Assembly);
 
         return services;
     }

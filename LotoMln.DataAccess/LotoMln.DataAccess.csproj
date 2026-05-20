@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LotoMln.Models\LotoMln.Models.csproj" />
+    <ProjectReference Include="..\LotoMln.Utilities\LotoMln.Utilities.csproj" />
   </ItemGroup>
 
 </Project>
