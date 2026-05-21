@@ -11,6 +11,8 @@ namespace LotoMln.Services.Services;
 public class GameEngineService(
     IUnitOfWork uow,
     IKinhVerifierService kinhVerifier,
+    IGameNotifier notifier,           
+    IGameCacheService cache,
     ILogger<GameEngineService> logger) : IGameEngineService
 {
     public async Task<GameStateDto> StartGameAsync(
@@ -74,16 +76,20 @@ public class GameEngineService(
         logger.LogInformation("Room {Code} game started with {N} players, {Q} unique questions",
             roomCode, players.Count, normalQs.Count);
 
-        return await BuildStateAsync(roomCode, ct);
+        var stateDto = await BuildStateAsync(roomCode, ct);
+        await notifier.GameStartedAsync(roomCode, stateDto);   // ← thêm
+        return stateDto;
     }
 
     public async Task<GameStateDto> SelectNextDrawerAsync(
-        string roomCode, CancellationToken ct = default)
+    string roomCode, CancellationToken ct = default)
     {
         await using var tx = await uow.BeginTransactionAsync(ct);
 
         var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
-        if (state.Phase is not (GamePhase.Idle or GamePhase.Revealing))
+
+        // Cho phép từ: Idle (đầu game), Revealing (giữa turn), DrawerSelecting (skip drawer timeout)
+        if (state.Phase is not (GamePhase.Idle or GamePhase.Revealing or GamePhase.DrawerSelecting))
             throw new InvalidOperationException($"Phase {state.Phase} không cho phép chọn drawer");
 
         var nextDrawer = state.PlayerQueue[state.QueueIndex % state.PlayerQueue.Count];
@@ -98,7 +104,9 @@ public class GameEngineService(
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return await BuildStateAsync(roomCode, ct);
+        var stateDto = await BuildStateAsync(roomCode, ct);
+        await notifier.TurnStartedAsync(roomCode, nextDrawer, state.Deadline!.Value);
+        return stateDto;
     }
 
     public async Task<DrawerPickResponse> OnDrawerPicksSlotAsync(
@@ -131,12 +139,11 @@ public class GameEngineService(
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        // QuestionDto KHÔNG có CorrectIndex
-        return new DrawerPickResponse(
-            new QuestionDto(question.Id, question.Text, question.Options, question.Type),
-            slot.AssignedNumber,
-            state.Deadline!.Value
-        );
+        var questionDto = new QuestionDto(question.Id, question.Text, question.Options, question.Type);
+        await notifier.QuestionShownAsync(                                    // ← thêm
+            roomCode, req.PlayerId, questionDto, slot.AssignedNumber, state.Deadline!.Value);
+
+        return new DrawerPickResponse(questionDto, slot.AssignedNumber, state.Deadline.Value);
     }
 
     public async Task<SubmitAnswerResponse> OnDrawerAnswersAsync(
@@ -192,6 +199,13 @@ public class GameEngineService(
         uow.GameStates.Update(state);
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        await notifier.AnswerSubmittedAsync(roomCode, req.PlayerId, isCorrect, correctIdx);  // ← thêm
+
+        if (isCorrect && calledNum.HasValue)
+            await notifier.NumberCalledAsync(roomCode, calledNum.Value, req.PlayerId);       // ← thêm
+        else if (!isCorrect)
+            await notifier.StealModeStartedAsync(roomCode, state.Deadline!.Value);           // ← thêm
 
         return new SubmitAnswerResponse(isCorrect, correctIdx, nextPhase, calledNum);
     }
@@ -314,8 +328,20 @@ public class GameEngineService(
     }
 
     public async Task<KinhVerifyResult> ClaimKinhAsync(
-        string roomCode, ClaimKinhRequest req, CancellationToken ct = default)
+    string roomCode, ClaimKinhRequest req, CancellationToken ct = default)
     {
+        // ↓ Redis distributed lock: chỉ 1 player thắng race
+        var acquired = await cache.TryAcquireKinhLockAsync(
+            roomCode, req.PlayerId, TimeSpan.FromSeconds(10));
+        if (!acquired)
+        {
+            var owner = await cache.GetKinhLockOwnerAsync(roomCode);
+            var result = new KinhVerifyResult(false, WinType.Row, -1,
+                $"Player {owner} đã claim trước (race lost)");
+            await notifier.KinhClaimedAsync(roomCode, req.PlayerId, false, result.Reason);
+            return result;
+        }
+
         await using var tx = await uow.BeginTransactionAsync(ct);
 
         var room = await uow.Rooms.GetByCodeAsync(roomCode, ct)
@@ -323,7 +349,7 @@ public class GameEngineService(
         if (room.State != RoomState.Playing)
             throw new InvalidOperationException("Game chưa chạy hoặc đã kết thúc");
 
-        var result = await kinhVerifier.VerifyAsync(roomCode, req.PlayerId, ct);
+        var verifyResult = await kinhVerifier.VerifyAsync(roomCode, req.PlayerId, ct);
 
         await uow.KinhClaims.AddAsync(new KinhClaim
         {
@@ -331,24 +357,27 @@ public class GameEngineService(
             RoomCode = roomCode,
             PlayerId = req.PlayerId,
             ClaimedAt = DateTime.UtcNow,
-            Verified = result.IsValid,
-            WinType = result.WinType,
-            WinIndex = result.WinIndex
+            Verified = verifyResult.IsValid,
+            WinType = verifyResult.WinType,
+            WinIndex = verifyResult.WinIndex
         }, ct);
 
-        if (result.IsValid)
+        if (verifyResult.IsValid)
         {
             room.State = RoomState.Ended;
             room.WinnerId = req.PlayerId;
             uow.Rooms.Update(room);
-            logger.LogInformation("🏆 Player {Pid} won {Code} via {WinType} {Idx}",
-                req.PlayerId, roomCode, result.WinType, result.WinIndex);
+            logger.LogInformation("🏆 Player {Pid} won {Code}", req.PlayerId, roomCode);
         }
 
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        return result;
+        await notifier.KinhClaimedAsync(roomCode, req.PlayerId, verifyResult.IsValid, verifyResult.Reason);
+        if (verifyResult.IsValid)
+            await notifier.GameEndedAsync(roomCode, req.PlayerId);
+
+        return verifyResult;
     }
 
     public async Task<GameStateDto?> GetGameStateAsync(
