@@ -14,6 +14,7 @@ public class RoomService(
     IUnitOfWork uow,
     ICardGeneratorService cardGen,
     IMapper mapper,
+    IGameNotifier notifier,
     ILogger<RoomService> logger) : IRoomService
 {
     public async Task<CreateRoomResponse> CreateRoomAsync(
@@ -66,7 +67,7 @@ public class RoomService(
     }
 
     public async Task<JoinRoomResponse> JoinRoomAsync(
-        string roomCode, JoinRoomRequest req, CancellationToken ct = default)
+    string roomCode, JoinRoomRequest req, CancellationToken ct = default)
     {
         var room = await uow.Rooms.GetByCodeAsync(roomCode, ct)
             ?? throw new InvalidOperationException($"Room '{roomCode}' không tồn tại");
@@ -81,7 +82,7 @@ public class RoomService(
         // Server sinh ClientId nếu client không gửi (lần join đầu)
         var clientId = req.ClientId ?? Guid.NewGuid();
 
-        // Check rejoin: nếu Player.Id đã tồn tại → cập nhật trạng thái online
+        // Check rejoin: nếu Player.Id đã tồn tại → cập nhật trạng thái online rồi return
         var existing = await uow.Players.GetByIdAsync(clientId, ct);
         if (existing != null)
         {
@@ -89,10 +90,11 @@ public class RoomService(
                 throw new InvalidOperationException("Bạn đang ở phòng khác");
 
             await uow.Players.SetOnlineStatusAsync(clientId, true, ct);
+            await notifier.PlayerJoinedAsync(roomCode, mapper.Map<PlayerDto>(existing));
             return new JoinRoomResponse(existing.Id, room.Code, existing.Name, playerCount);
         }
 
-        // Join lần đầu
+        // Join lần đầu: tạo player mới
         var player = new Player
         {
             Id = clientId,
@@ -103,6 +105,8 @@ public class RoomService(
         };
         await uow.Players.AddAsync(player, ct);
         await uow.SaveChangesAsync(ct);
+
+        await notifier.PlayerJoinedAsync(roomCode, mapper.Map<PlayerDto>(player));
 
         logger.LogInformation("Player {PlayerId} ({Name}) joined {Code}",
             player.Id, player.Name, roomCode);
