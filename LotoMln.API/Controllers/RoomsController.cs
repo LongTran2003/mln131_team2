@@ -82,4 +82,11 @@ public class RoomsController(IRoomService roomService) : ControllerBase
         var released = await roomService.UnpickCardAsync(code, playerId, ct);
         return Ok(new { released });
     }
+
+    [HttpGet("{code}/cards")]
+    public async Task<IActionResult> GetAllCards(string code, CancellationToken ct)
+    {
+        var cards = await roomService.GetAllCardsAsync(code, ct);
+        return Ok(cards);
+    }
 }

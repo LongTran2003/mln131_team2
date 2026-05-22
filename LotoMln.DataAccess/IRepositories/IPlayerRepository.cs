@@ -11,4 +11,5 @@ public interface IPlayerRepository
     Task AddAsync(Player player, CancellationToken ct = default);
     void Update(Player player);
     Task SetOnlineStatusAsync(Guid id, bool online, CancellationToken ct = default);
+    Task<Player?> GetByNameInRoomAsync(string roomCode, string name, CancellationToken ct = default);
 }

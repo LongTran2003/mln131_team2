@@ -42,4 +42,12 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
 
     public Task GameEndedAsync(string roomCode, Guid winnerId)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("GameEnded", new { winnerId });
+
+    public Task CardPickedAsync(string code, Guid playerId, Guid cardId, CancellationToken ct = default)
+    => hub.Clients.Group($"room:{code}")
+        .SendAsync("CardPicked", new { playerId, cardId }, ct);
+
+    public Task CardUnpickedAsync(string code, Guid playerId, Guid cardId, CancellationToken ct = default)
+        => hub.Clients.Group($"room:{code}")
+            .SendAsync("CardUnpicked", new { playerId, cardId }, ct);
 }

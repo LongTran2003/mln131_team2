@@ -1,5 +1,6 @@
 using LotoMln.API.Extension;
 using LotoMln.API.Hubs;
+using LotoMln.API.Middleware;
 using LotoMln.DataAccess.DBContext;
 using LotoMln.DataAccess.Seed;
 using System.Text.Json.Serialization;
@@ -24,6 +25,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Auto-seed questions on startup
 await using (var scope = app.Services.CreateAsyncScope())

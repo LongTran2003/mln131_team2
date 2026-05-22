@@ -90,9 +90,16 @@ public class RoomService(
                 throw new InvalidOperationException("Bạn đang ở phòng khác");
 
             await uow.Players.SetOnlineStatusAsync(clientId, true, ct);
-            await notifier.PlayerJoinedAsync(roomCode, mapper.Map<PlayerDto>(existing));
+            var rejoinDto = mapper.Map<PlayerDto>(existing) with { IsHost = existing.Id == room.HostId };
+            await notifier.PlayerJoinedAsync(roomCode, rejoinDto);
             return new JoinRoomResponse(existing.Id, room.Code, existing.Name, playerCount);
         }
+
+        // Check tên trùng trong phòng (chỉ apply khi join lần đầu, không phải rejoin)
+        var nameTaken = await uow.Players.GetByNameInRoomAsync(roomCode, req.PlayerName, ct);
+        if (nameTaken != null)
+            throw new InvalidOperationException(
+                $"Tên \"{req.PlayerName}\" đã có người dùng trong phòng. Hãy chọn tên khác.");
 
         // Join lần đầu: tạo player mới
         var player = new Player
@@ -106,7 +113,8 @@ public class RoomService(
         await uow.Players.AddAsync(player, ct);
         await uow.SaveChangesAsync(ct);
 
-        await notifier.PlayerJoinedAsync(roomCode, mapper.Map<PlayerDto>(player));
+        var dto = mapper.Map<PlayerDto>(player) with { IsHost = player.Id == room.HostId };
+        await notifier.PlayerJoinedAsync(roomCode, dto);
 
         logger.LogInformation("Player {PlayerId} ({Name}) joined {Code}",
             player.Id, player.Name, roomCode);
@@ -131,6 +139,10 @@ public class RoomService(
         if (player.RoomCode != req.RoomCode)
             throw new InvalidOperationException("Player không thuộc phòng này");
 
+        if (player.Id == room.HostId)
+            throw new InvalidOperationException(
+                "Host là quản trò, không tham gia chơi nên không cần pick card");
+
         if (player.CardId != null)
             throw new InvalidOperationException("Bạn đã pick card rồi");
 
@@ -152,6 +164,7 @@ public class RoomService(
 
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+        await notifier.CardPickedAsync(req.RoomCode, req.PlayerId, req.CardId, ct);
 
         logger.LogInformation("Player {PlayerId} picked card {CardId} in room {Code}",
             req.PlayerId, req.CardId, req.RoomCode);
@@ -172,11 +185,22 @@ public class RoomService(
         return mapper.Map<List<CardDto>>(cards);
     }
 
-    public async Task<List<PlayerDto>> GetPlayersAsync(
+    public async Task<List<CardDto>> GetAllCardsAsync(
         string roomCode, CancellationToken ct = default)
     {
+        var cards = await uow.Cards.GetByRoomCodeAsync(roomCode, ct);
+        return mapper.Map<List<CardDto>>(cards);
+    }
+
+    public async Task<List<PlayerDto>> GetPlayersAsync(
+    string roomCode, CancellationToken ct = default)
+    {
+        var room = await uow.Rooms.GetByCodeAsync(roomCode, ct);
         var players = await uow.Players.GetByRoomCodeAsync(roomCode, ct);
-        return mapper.Map<List<PlayerDto>>(players);
+        var dtos = mapper.Map<List<PlayerDto>>(players);
+
+        // PlayerDto là record → dùng `with` để clone với IsHost đúng
+        return dtos.Select(d => d with { IsHost = d.Id == room!.HostId }).ToList();
     }
 
     public async Task<bool> UnpickCardAsync(
@@ -188,7 +212,8 @@ public class RoomService(
         if (player == null || player.RoomCode != roomCode || player.CardId == null)
             return false;
 
-        var card = await uow.Cards.GetByIdAsync(player.CardId.Value, ct);
+        var cardId = player.CardId.Value;
+        var card = await uow.Cards.GetByIdAsync(cardId, ct);
         if (card != null)
         {
             card.OwnerId = null;
@@ -199,6 +224,8 @@ public class RoomService(
 
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
+
+        await notifier.CardUnpickedAsync(roomCode, playerId, cardId, ct);
 
         logger.LogInformation("Player {Pid} unpicked card in {Code}", playerId, roomCode);
         return true;

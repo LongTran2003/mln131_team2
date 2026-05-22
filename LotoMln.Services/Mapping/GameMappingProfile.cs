@@ -9,7 +9,8 @@ public class GameMappingProfile : Profile
     public GameMappingProfile()
     {
         // Player → PlayerDto (tự động match field cùng tên)
-        CreateMap<Player, PlayerDto>();
+        CreateMap<Player, PlayerDto>()
+            .ForCtorParam(nameof(PlayerDto.IsHost), opt => opt.MapFrom(_ => false));
 
         // Room → RoomDto (PlayerCount tính từ navigation Players)
         CreateMap<Room, RoomDto>()

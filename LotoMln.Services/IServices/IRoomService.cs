@@ -11,4 +11,5 @@ public interface IRoomService
     Task<List<CardDto>> GetAvailableCardsAsync(string roomCode, CancellationToken ct = default);
     Task<List<PlayerDto>> GetPlayersAsync(string roomCode, CancellationToken ct = default);
     Task<bool> UnpickCardAsync(string roomCode, Guid playerId, CancellationToken ct = default);
+    Task<List<CardDto>> GetAllCardsAsync(string roomCode, CancellationToken ct = default);
 }

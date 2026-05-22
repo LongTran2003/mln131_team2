@@ -31,4 +31,10 @@ public class PlayerRepository(AppDbContext db) : IPlayerRepository
             .Where(p => p.Id == id)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.Online, online), ct);
     }
+
+    public Task<Player?> GetByNameInRoomAsync(
+    string roomCode, string name, CancellationToken ct = default)
+    => db.Players.FirstOrDefaultAsync(p =>
+        p.RoomCode == roomCode &&
+        p.Name.ToLower() == name.ToLower(), ct);
 }

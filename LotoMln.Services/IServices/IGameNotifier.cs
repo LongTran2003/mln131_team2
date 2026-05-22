@@ -18,4 +18,6 @@ public interface IGameNotifier
     Task StealResolvedAsync(string roomCode, Guid? winnerId, int? calledNumber, bool slotLocked);
     Task KinhClaimedAsync(string roomCode, Guid playerId, bool verified, string? reason);
     Task GameEndedAsync(string roomCode, Guid winnerId);
+    Task CardPickedAsync(string roomCode, Guid playerId, Guid cardId, CancellationToken ct = default);
+    Task CardUnpickedAsync(string roomCode, Guid playerId, Guid cardId, CancellationToken ct = default);
 }
