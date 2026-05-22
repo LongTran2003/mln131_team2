@@ -178,4 +178,29 @@ public class RoomService(
         var players = await uow.Players.GetByRoomCodeAsync(roomCode, ct);
         return mapper.Map<List<PlayerDto>>(players);
     }
+
+    public async Task<bool> UnpickCardAsync(
+    string roomCode, Guid playerId, CancellationToken ct = default)
+    {
+        await using var tx = await uow.BeginTransactionAsync(ct);
+
+        var player = await uow.Players.GetByIdAsync(playerId, ct);
+        if (player == null || player.RoomCode != roomCode || player.CardId == null)
+            return false;
+
+        var card = await uow.Cards.GetByIdAsync(player.CardId.Value, ct);
+        if (card != null)
+        {
+            card.OwnerId = null;
+            uow.Cards.Update(card);
+        }
+        player.CardId = null;
+        uow.Players.Update(player);
+
+        await uow.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
+
+        logger.LogInformation("Player {Pid} unpicked card in {Code}", playerId, roomCode);
+        return true;
+    }
 }

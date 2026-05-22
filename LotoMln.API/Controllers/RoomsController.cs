@@ -74,4 +74,12 @@ public class RoomsController(IRoomService roomService) : ControllerBase
         var players = await roomService.GetPlayersAsync(code, ct);
         return Ok(players);
     }
+
+    [HttpDelete("{code}/cards/pick")]
+    public async Task<IActionResult> UnpickCard(
+    string code, [FromQuery] Guid playerId, CancellationToken ct)
+    {
+        var released = await roomService.UnpickCardAsync(code, playerId, ct);
+        return Ok(new { released });
+    }
 }
