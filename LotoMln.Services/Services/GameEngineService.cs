@@ -28,8 +28,15 @@ public class GameEngineService(
             throw new InvalidOperationException("Game đã start hoặc kết thúc");
 
         var players = await uow.Players.GetByRoomCodeAsync(roomCode, ct);
-        if (players.Count < 2)
-            throw new InvalidOperationException("Cần ít nhất 2 người chơi");
+        var gamers = players.Where(p => p.Id != room.HostId).ToList();
+
+        if (gamers.Count < 2)
+            throw new InvalidOperationException("Cần ít nhất 2 người chơi (không tính host)");
+
+        var notPicked = gamers.Where(p => p.CardId == null).ToList();
+        if (notPicked.Any())
+            throw new InvalidOperationException(
+                $"Các player chưa chọn card: {string.Join(", ", notPicked.Select(p => p.Name))}");
 
         // Lấy random questions (cho phép recycle nếu < 40)
         var normalQs = await uow.Questions.GetRandomByTypeAsync(
@@ -54,7 +61,7 @@ public class GameEngineService(
         await uow.QuestionSlots.AddRangeAsync(slots, ct);
 
         // Shuffle player queue
-        var queue = players.Select(p => p.Id)
+        var queue = gamers.Select(p => p.Id)
             .OrderBy(_ => Random.Shared.Next()).ToList();
 
         var state = new GameStateSnapshot
