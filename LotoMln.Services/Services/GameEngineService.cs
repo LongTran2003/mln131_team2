@@ -392,8 +392,15 @@ public class GameEngineService(
     {
         var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
         var called = await uow.CalledNumbers.GetCalledNumbersAsync(roomCode, ct);
-        var available = await uow.QuestionSlots.CountByStatusAsync(roomCode, SlotStatus.Available, ct);
-        var locked = await uow.QuestionSlots.CountByStatusAsync(roomCode, SlotStatus.Locked, ct);
+        var slots = await uow.QuestionSlots.GetByRoomCodeAsync(roomCode, ct);
+
+        var answeredPositions = slots
+            .Where(s => s.Status == SlotStatus.Answered)
+            .Select(s => s.Position).OrderBy(p => p).ToList();
+        var lockedPositions = slots
+            .Where(s => s.Status == SlotStatus.Locked)
+            .Select(s => s.Position).OrderBy(p => p).ToList();
+        var remaining = slots.Count - answeredPositions.Count - lockedPositions.Count;
 
         return new GameStateDto(
             roomCode,
@@ -402,8 +409,10 @@ public class GameEngineService(
             state.CurrentSlotId,
             state.Deadline,
             called,
-            available,
-            locked
+            remaining,
+            lockedPositions.Count,
+            answeredPositions,
+            lockedPositions
         );
     }
 }

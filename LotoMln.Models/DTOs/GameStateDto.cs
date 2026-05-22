@@ -10,5 +10,7 @@ public record GameStateDto(
     DateTime? Deadline,
     List<int> CalledNumbers,
     int RemainingSlots,
-    int LockedSlots
+    int LockedSlots,
+    List<int> AnsweredPositions,     // ← thêm
+    List<int> LockedPositions         // ← thêm
 );
