@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace LotoMln.API.Controllers;
 
 [ApiController]
-[Route("api/health")]
+[Route("api/[controller]")]
 public class HealthController(IUnitOfWork uow, AppDbContext db) : ControllerBase
 {
     [HttpGet]

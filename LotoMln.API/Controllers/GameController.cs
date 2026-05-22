@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LotoMln.API.Controllers;
 
 [ApiController]
-[Route("api/Rooms/{code}/game")]
+[Route("api/[controller]")]
 public class GameController(IGameEngineService engine) : ControllerBase
 {
     [HttpGet("state")]

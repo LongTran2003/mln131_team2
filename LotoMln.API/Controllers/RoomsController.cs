@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace LotoMln.API.Controllers;
 
 [ApiController]
-[Route("api/room")]
+[Route("api/[controller]")]
 public class RoomsController(IRoomService roomService) : ControllerBase
 {
     [HttpPost]
