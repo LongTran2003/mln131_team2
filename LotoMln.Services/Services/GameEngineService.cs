@@ -84,8 +84,10 @@ public class GameEngineService(
             roomCode, players.Count, normalQs.Count);
 
         var stateDto = await BuildStateAsync(roomCode, ct);
-        await notifier.GameStartedAsync(roomCode, stateDto);   // ← thêm
-        return stateDto;
+        await notifier.GameStartedAsync(roomCode, stateDto);
+
+        // Auto-trigger lượt đầu: chuyển Idle → DrawerSelecting, chọn drawer, broadcast TurnStarted
+        return await SelectNextDrawerAsync(roomCode, ct);
     }
 
     public async Task<GameStateDto> SelectNextDrawerAsync(
