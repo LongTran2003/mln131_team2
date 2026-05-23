@@ -16,7 +16,7 @@ public class GameEngineService(
     ILogger<GameEngineService> logger) : IGameEngineService
 {
     public async Task<GameStateDto> StartGameAsync(
-        string roomCode, Guid initiatorId, CancellationToken ct = default)
+    string roomCode, Guid initiatorId, CancellationToken ct = default)
     {
         await using var tx = await uow.BeginTransactionAsync(ct);
 
@@ -27,12 +27,16 @@ public class GameEngineService(
         if (room.State != RoomState.Lobby)
             throw new InvalidOperationException("Game đã start hoặc kết thúc");
 
-        var players = await uow.Players.GetByRoomCodeAsync(roomCode, ct);
-        var gamers = players.Where(p => p.Id != room.HostId).ToList();
+        var allPlayers = await uow.Players.GetByRoomCodeAsync(roomCode, ct);
+
+        // ← FILTER: loại host khỏi danh sách chơi
+        var gamers = allPlayers.Where(p => p.Id != room.HostId).ToList();
 
         if (gamers.Count < 2)
-            throw new InvalidOperationException("Cần ít nhất 2 người chơi (không tính host)");
+            throw new InvalidOperationException(
+                "Cần ít nhất 2 người chơi (không tính host)");
 
+        // ← VALIDATE: tất cả gamer phải có card
         var notPicked = gamers.Where(p => p.CardId == null).ToList();
         if (notPicked.Any())
             throw new InvalidOperationException(
@@ -60,8 +64,8 @@ public class GameEngineService(
         }
         await uow.QuestionSlots.AddRangeAsync(slots, ct);
 
-        // Shuffle player queue
-        var queue = players.Select(p => p.Id)
+        // ← QUEUE: chỉ chứa gamers (không có host)
+        var queue = gamers.Select(p => p.Id)
             .OrderBy(_ => Random.Shared.Next()).ToList();
 
         var state = new GameStateSnapshot
@@ -80,13 +84,13 @@ public class GameEngineService(
         await uow.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        logger.LogInformation("Room {Code} game started with {N} players, {Q} unique questions",
-            roomCode, players.Count, normalQs.Count);
+        logger.LogInformation("Room {Code} game started with {N} gamers (host {HostId} excluded), {Q} unique questions",
+            roomCode, gamers.Count, room.HostId, normalQs.Count);
 
         var stateDto = await BuildStateAsync(roomCode, ct);
         await notifier.GameStartedAsync(roomCode, stateDto);
 
-        // Auto-trigger lượt đầu: chuyển Idle → DrawerSelecting, chọn drawer, broadcast TurnStarted
+        // Auto-trigger lượt đầu: chuyển Idle → DrawerSelecting
         return await SelectNextDrawerAsync(roomCode, ct);
     }
 
