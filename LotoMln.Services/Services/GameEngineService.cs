@@ -61,7 +61,7 @@ public class GameEngineService(
         await uow.QuestionSlots.AddRangeAsync(slots, ct);
 
         // Shuffle player queue
-        var queue = gamers.Select(p => p.Id)
+        var queue = players.Select(p => p.Id)
             .OrderBy(_ => Random.Shared.Next()).ToList();
 
         var state = new GameStateSnapshot
