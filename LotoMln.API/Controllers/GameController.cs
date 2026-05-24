@@ -31,6 +31,18 @@ public class GameController(IGameEngineService engine) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
+    [HttpPost("select-answerer")]
+    public async Task<IActionResult> SelectAnswerer(
+        string code, [FromBody] SelectAnswererRequest req, CancellationToken ct)
+    {
+        try
+        {
+            await engine.SelectAnswererAsync(code, req.HostId, req.PlayerId, ct);
+            return Ok();
+        }
+        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
     [HttpPost("submit-answer")]
     public async Task<IActionResult> SubmitAnswer(
         string code, [FromBody] SubmitAnswerRequest req, CancellationToken ct)
@@ -39,11 +51,15 @@ public class GameController(IGameEngineService engine) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPost("steal")]
-    public async Task<IActionResult> Steal(
-        string code, [FromBody] StealAttemptRequest req, CancellationToken ct)
+    [HttpPost("skip-slot")]
+    public async Task<IActionResult> SkipSlot(
+        string code, [FromBody] SkipSlotRequest req, CancellationToken ct)
     {
-        try { return Ok(await engine.RecordStealAttemptAsync(code, req, ct)); }
+        try
+        {
+            await engine.SkipSlotAsync(code, req.HostId, ct);
+            return Ok();
+        }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 

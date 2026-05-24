@@ -97,7 +97,6 @@ public static class ServiceCollectionExtensions
                 opt.Configuration.ChannelPrefix = RedisChannel.Literal("loto:"));
 
         services.AddHostedService<TurnTimeoutHostedService>();
-        services.AddHostedService<StealResolverHostedService>();
 
         return services;
     }

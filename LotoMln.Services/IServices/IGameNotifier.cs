@@ -1,20 +1,27 @@
-﻿using LotoMln.Models.DTOs;
+using LotoMln.Models.DTOs;
 
 namespace LotoMln.Services.IServices;
 
-/// <summary>
-/// Abstraction để Services emit events ra real-time clients mà không cần biết SignalR.
-/// Impl thực tế ở API project (SignalRGameNotifier).
-/// </summary>
 public interface IGameNotifier
 {
     Task PlayerJoinedAsync(string roomCode, PlayerDto player);
     Task GameStartedAsync(string roomCode, GameStateDto state);
-    Task WheelSpunAsync(string roomCode, int spunNumber, QuestionDto question, Guid firstAnswererId, DateTime deadline);
+
+    // Host quay số → tất cả thấy spun number; question chỉ host nhìn (FE gate)
+    Task WheelSpunAsync(string roomCode, int spunNumber, QuestionDto question);
+
+    // Host chọn người trả lời → player đó nhận popup "Đến lượt bạn"
+    Task AnswererSelectedAsync(string roomCode, Guid drawerId);
+
+    // Host đánh dấu đáp án → mọi người biết đúng/sai
     Task AnswerSubmittedAsync(string roomCode, Guid playerId, bool isCorrect, int correctIndex);
+
+    // Player thắng câu → mark số tự động
     Task NumberCalledAsync(string roomCode, int number, Guid byPlayer);
-    Task StealModeStartedAsync(string roomCode, DateTime deadline);
-    Task StealResolvedAsync(string roomCode, Guid? winnerId, int? calledNumber, bool slotLocked);
+
+    // Host bỏ qua slot (không ai biết)
+    Task SlotSkippedAsync(string roomCode, int number);
+
     Task KinhClaimedAsync(string roomCode, Guid playerId, bool verified, string? reason);
     Task GameEndedAsync(string roomCode, Guid winnerId);
     Task ReadyToSpinAsync(string roomCode);

@@ -15,12 +15,13 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
     public Task GameStartedAsync(string roomCode, GameStateDto state)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("GameStarted", state);
 
-    public Task WheelSpunAsync(string roomCode, int spunNumber, QuestionDto question, Guid firstAnswererId, DateTime deadline)
+    public Task WheelSpunAsync(string roomCode, int spunNumber, QuestionDto question)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("WheelSpun",
-            new { spunNumber, question, firstAnswererId, deadline });
+            new { spunNumber, question });
 
-    public Task ReadyToSpinAsync(string roomCode)
-        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("ReadyToSpin");
+    public Task AnswererSelectedAsync(string roomCode, Guid drawerId)
+        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("AnswererSelected",
+            new { drawerId });
 
     public Task AnswerSubmittedAsync(string roomCode, Guid playerId, bool isCorrect, int correctIndex)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("AnswerSubmitted",
@@ -29,12 +30,8 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
     public Task NumberCalledAsync(string roomCode, int number, Guid byPlayer)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("NumberCalled", new { number, byPlayer });
 
-    public Task StealModeStartedAsync(string roomCode, DateTime deadline)
-        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("StealModeStarted", new { deadline });
-
-    public Task StealResolvedAsync(string roomCode, Guid? winnerId, int? calledNumber, bool slotLocked)
-        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("StealResolved",
-            new { winnerId, calledNumber, slotLocked });
+    public Task SlotSkippedAsync(string roomCode, int number)
+        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("SlotSkipped", new { number });
 
     public Task KinhClaimedAsync(string roomCode, Guid playerId, bool verified, string? reason)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("KinhClaimed",
@@ -42,6 +39,9 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
 
     public Task GameEndedAsync(string roomCode, Guid winnerId)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("GameEnded", new { winnerId });
+
+    public Task ReadyToSpinAsync(string roomCode)
+        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("ReadyToSpin");
 
     public Task CardPickedAsync(string code, Guid playerId, Guid cardId, CancellationToken ct = default)
         => hub.Clients.Group(RoomGroup(code)).SendAsync("CardPicked", new { playerId, cardId }, ct);
