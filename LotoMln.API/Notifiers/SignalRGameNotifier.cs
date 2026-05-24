@@ -1,4 +1,4 @@
-﻿using LotoMln.API.Hubs;
+using LotoMln.API.Hubs;
 using LotoMln.Models.DTOs;
 using LotoMln.Services.IServices;
 using Microsoft.AspNetCore.SignalR;
@@ -15,12 +15,12 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
     public Task GameStartedAsync(string roomCode, GameStateDto state)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("GameStarted", state);
 
-    public Task TurnStartedAsync(string roomCode, Guid drawerId, DateTime deadline)
-        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("TurnStarted", new { drawerId, deadline });
+    public Task WheelSpunAsync(string roomCode, int spunNumber, QuestionDto question, Guid firstAnswererId, DateTime deadline)
+        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("WheelSpun",
+            new { spunNumber, question, firstAnswererId, deadline });
 
-    public Task QuestionShownAsync(string roomCode, Guid drawerId, QuestionDto question, int assignedNumber, DateTime deadline)
-        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("QuestionShown",
-            new { drawerId, question, assignedNumber, deadline });
+    public Task ReadyToSpinAsync(string roomCode)
+        => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("ReadyToSpin");
 
     public Task AnswerSubmittedAsync(string roomCode, Guid playerId, bool isCorrect, int correctIndex)
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("AnswerSubmitted",
@@ -44,10 +44,8 @@ public class SignalRGameNotifier(IHubContext<GameHub> hub) : IGameNotifier
         => hub.Clients.Group(RoomGroup(roomCode)).SendAsync("GameEnded", new { winnerId });
 
     public Task CardPickedAsync(string code, Guid playerId, Guid cardId, CancellationToken ct = default)
-    => hub.Clients.Group($"room:{code}")
-        .SendAsync("CardPicked", new { playerId, cardId }, ct);
+        => hub.Clients.Group(RoomGroup(code)).SendAsync("CardPicked", new { playerId, cardId }, ct);
 
     public Task CardUnpickedAsync(string code, Guid playerId, Guid cardId, CancellationToken ct = default)
-        => hub.Clients.Group($"room:{code}")
-            .SendAsync("CardUnpicked", new { playerId, cardId }, ct);
+        => hub.Clients.Group(RoomGroup(code)).SendAsync("CardUnpicked", new { playerId, cardId }, ct);
 }

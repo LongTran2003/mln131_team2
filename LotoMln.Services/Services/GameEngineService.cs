@@ -64,9 +64,8 @@ public class GameEngineService(
         }
         await uow.QuestionSlots.AddRangeAsync(slots, ct);
 
-        // ← QUEUE: chỉ chứa gamers (không có host)
-        var queue = gamers.Select(p => p.Id)
-            .OrderBy(_ => Random.Shared.Next()).ToList();
+        // ← QUEUE: chỉ chứa gamers (không có host), giữ nguyên thứ tự join
+        var queue = gamers.Select(p => p.Id).ToList();
 
         var state = new GameStateSnapshot
         {
@@ -90,59 +89,36 @@ public class GameEngineService(
         var stateDto = await BuildStateAsync(roomCode, ct);
         await notifier.GameStartedAsync(roomCode, stateDto);
 
-        // Auto-trigger lượt đầu: chuyển Idle → DrawerSelecting
-        return await SelectNextDrawerAsync(roomCode, ct);
-    }
-
-    public async Task<GameStateDto> SelectNextDrawerAsync(
-    string roomCode, CancellationToken ct = default)
-    {
-        await using var tx = await uow.BeginTransactionAsync(ct);
-
-        var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
-
-        // Cho phép từ: Idle (đầu game), Revealing (giữa turn), DrawerSelecting (skip drawer timeout)
-        if (state.Phase is not (GamePhase.Idle or GamePhase.Revealing or GamePhase.DrawerSelecting))
-            throw new InvalidOperationException($"Phase {state.Phase} không cho phép chọn drawer");
-
-        var nextDrawer = state.PlayerQueue[state.QueueIndex % state.PlayerQueue.Count];
-        state.QueueIndex = (state.QueueIndex + 1) % state.PlayerQueue.Count;
-        state.CurrentDrawerId = nextDrawer;
-        state.CurrentSlotId = null;
-        state.Phase = GamePhase.DrawerSelecting;
-        state.PhaseStartedAt = DateTime.UtcNow;
-        state.Deadline = DateTime.UtcNow.AddSeconds(15);
-
-        uow.GameStates.Update(state);
-        await uow.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
-
-        var stateDto = await BuildStateAsync(roomCode, ct);
-        await notifier.TurnStartedAsync(roomCode, nextDrawer, state.Deadline!.Value);
+        // Host sẽ quay số thủ công — trả về state hiện tại (Idle)
         return stateDto;
     }
 
-    public async Task<DrawerPickResponse> OnDrawerPicksSlotAsync(
-        string roomCode, DrawerPickRequest req, CancellationToken ct = default)
+    public async Task<SpinWheelResponse> SpinWheelAsync(
+        string roomCode, Guid hostId, CancellationToken ct = default)
     {
         await using var tx = await uow.BeginTransactionAsync(ct);
 
+        var room = await uow.Rooms.GetByCodeAsync(roomCode, ct)
+            ?? throw new InvalidOperationException("Room không tồn tại");
+        if (room.HostId != hostId)
+            throw new InvalidOperationException("Chỉ host được quay số");
+
         var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
-        if (state.Phase != GamePhase.DrawerSelecting)
-            throw new InvalidOperationException("Không phải phase chọn slot");
-        if (state.CurrentDrawerId != req.PlayerId)
-            throw new InvalidOperationException("Bạn không phải drawer hiện tại");
-        if (req.Position < 1 || req.Position > GameConstants.NumberPoolSize)
-            throw new InvalidOperationException("Position phải từ 1-40");
+        if (state.Phase != GamePhase.Idle)
+            throw new InvalidOperationException("Chỉ được quay khi game đang ở trạng thái Idle");
 
-        var slot = await uow.QuestionSlots.GetByPositionAsync(roomCode, req.Position, ct)
-            ?? throw new InvalidOperationException("Slot không tồn tại");
-        if (slot.Status != SlotStatus.Available)
-            throw new InvalidOperationException("Slot đã bị mở/khóa");
+        var slots = await uow.QuestionSlots.GetByRoomCodeAsync(roomCode, ct);
+        var available = slots.Where(s => s.Status == SlotStatus.Available).ToList();
+        if (available.Count == 0)
+            throw new InvalidOperationException("Không còn câu hỏi — game kết thúc");
 
+        var slot = available[Random.Shared.Next(available.Count)];
         var question = await uow.Questions.GetByIdAsync(slot.QuestionId, ct)
             ?? throw new InvalidOperationException("Câu hỏi không tồn tại");
 
+        var firstAnswererId = state.PlayerQueue[0];
+
+        state.CurrentDrawerId = firstAnswererId;
         state.CurrentSlotId = slot.Id;
         state.Phase = GamePhase.DrawerAnswering;
         state.PhaseStartedAt = DateTime.UtcNow;
@@ -153,10 +129,30 @@ public class GameEngineService(
         await tx.CommitAsync(ct);
 
         var questionDto = new QuestionDto(question.Id, question.Text, question.Options, question.Type);
-        await notifier.QuestionShownAsync(                                    // ← thêm
-            roomCode, req.PlayerId, questionDto, slot.AssignedNumber, state.Deadline!.Value);
+        await notifier.WheelSpunAsync(roomCode, slot.AssignedNumber, questionDto, firstAnswererId, state.Deadline.Value);
 
-        return new DrawerPickResponse(questionDto, slot.AssignedNumber, state.Deadline.Value);
+        logger.LogInformation("Room {Code}: wheel spun → number {N}, firstAnswerer {Pid}",
+            roomCode, slot.AssignedNumber, firstAnswererId);
+
+        return new SpinWheelResponse(slot.AssignedNumber, questionDto, firstAnswererId, state.Deadline.Value);
+    }
+
+    public async Task AdvanceToIdleAsync(string roomCode, CancellationToken ct = default)
+    {
+        var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
+        if (state.Phase != GamePhase.Revealing) return;
+
+        state.Phase = GamePhase.Idle;
+        state.CurrentDrawerId = null;
+        state.CurrentSlotId = null;
+        state.Deadline = null;
+        state.PhaseStartedAt = DateTime.UtcNow;
+
+        uow.GameStates.Update(state);
+        await uow.SaveChangesAsync(ct);
+
+        await notifier.ReadyToSpinAsync(roomCode);
+        logger.LogInformation("Room {Code}: Revealing ended → Idle (ready to spin)", roomCode);
     }
 
     public async Task<SubmitAnswerResponse> OnDrawerAnswersAsync(
@@ -194,6 +190,9 @@ public class GameEngineService(
                 CalledAt = DateTime.UtcNow,
                 CalledByPlayerId = req.PlayerId
             }, ct);
+
+            // Auto-mark số cho người thắng
+            await AutoMarkForWinnerAsync(req.PlayerId, slot.AssignedNumber, ct);
 
             calledNum = slot.AssignedNumber;
             nextPhase = GamePhase.Revealing;
@@ -294,6 +293,8 @@ public class GameEngineService(
                 CalledByPlayerId = winner.PlayerId
             }, ct);
 
+            await AutoMarkForWinnerAsync(winner.PlayerId, slot.AssignedNumber, ct);
+
             winnerId = winner.PlayerId;
             calledNum = slot.AssignedNumber;
         }
@@ -316,28 +317,9 @@ public class GameEngineService(
         logger.LogInformation("Steal resolved in {Code}: winner={Winner}, locked={Locked}",
             roomCode, winnerId, locked);
 
+        await notifier.StealResolvedAsync(roomCode, winnerId, calledNum, locked);
+
         return new StealResolveResult(winnerId, calledNum, locked);
-    }
-
-    public async Task<bool> MarkNumberAsync(
-        string roomCode, MarkNumberRequest req, CancellationToken ct = default)
-    {
-        var player = await uow.Players.GetByIdAsync(req.PlayerId, ct)
-            ?? throw new InvalidOperationException("Player không tồn tại");
-        if (player.RoomCode != roomCode)
-            throw new InvalidOperationException("Player không thuộc phòng này");
-
-        var isCalled = await uow.CalledNumbers.IsCalledAsync(roomCode, req.Number, ct);
-        if (!isCalled)
-            throw new InvalidOperationException($"Số {req.Number} chưa được gọi");
-
-        if (!player.MarkedNumbers.Contains(req.Number))
-        {
-            player.MarkedNumbers = [.. player.MarkedNumbers, req.Number];
-            uow.Players.Update(player);
-            await uow.SaveChangesAsync(ct);
-        }
-        return true;
     }
 
     public async Task<KinhVerifyResult> ClaimKinhAsync(
@@ -401,6 +383,19 @@ public class GameEngineService(
         return await BuildStateAsync(roomCode, ct);
     }
 
+    private async Task AutoMarkForWinnerAsync(Guid playerId, int number, CancellationToken ct)
+    {
+        var player = await uow.Players.GetWithCardAsync(playerId, ct);
+        if (player?.Card == null) return;
+        bool hasNumber = player.Card.Grid.Any(row => row.Contains(number));
+        if (hasNumber && !player.MarkedNumbers.Contains(number))
+        {
+            player.MarkedNumbers = [.. player.MarkedNumbers, number];
+            uow.Players.Update(player);
+            await uow.SaveChangesAsync(ct);
+        }
+    }
+
     private async Task<GameStateDto> BuildStateAsync(string roomCode, CancellationToken ct)
     {
         var state = await uow.GameStates.GetRequiredAsync(roomCode, ct);
@@ -415,6 +410,13 @@ public class GameEngineService(
             .Select(s => s.Position).OrderBy(p => p).ToList();
         var remaining = slots.Count - answeredPositions.Count - lockedPositions.Count;
 
+        int? spunNumber = null;
+        if (state.CurrentSlotId.HasValue)
+        {
+            var currentSlot = slots.FirstOrDefault(s => s.Id == state.CurrentSlotId.Value);
+            spunNumber = currentSlot?.AssignedNumber;
+        }
+
         return new GameStateDto(
             roomCode,
             state.Phase,
@@ -425,7 +427,8 @@ public class GameEngineService(
             remaining,
             lockedPositions.Count,
             answeredPositions,
-            lockedPositions
+            lockedPositions,
+            spunNumber
         );
     }
 }

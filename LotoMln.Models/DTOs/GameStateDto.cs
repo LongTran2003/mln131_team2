@@ -11,6 +11,7 @@ public record GameStateDto(
     List<int> CalledNumbers,
     int RemainingSlots,
     int LockedSlots,
-    List<int> AnsweredPositions,     // ← thêm
-    List<int> LockedPositions         // ← thêm
+    List<int> AnsweredPositions,
+    List<int> LockedPositions,
+    int? CurrentSpunNumber    // số vừa quay (hiện cho FE biết mà sync sau reconnect)
 );

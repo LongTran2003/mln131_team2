@@ -1,4 +1,4 @@
-﻿using LotoMln.Models.DTOs;
+using LotoMln.Models.DTOs;
 using LotoMln.Services.IServices;
 using Microsoft.AspNetCore.Mvc;
 
@@ -23,18 +23,11 @@ public class GameController(IGameEngineService engine) : ControllerBase
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
-    [HttpPost("next-drawer")]
-    public async Task<IActionResult> NextDrawer(string code, CancellationToken ct)
+    [HttpPost("spin-wheel")]
+    public async Task<IActionResult> SpinWheel(
+        string code, [FromBody] SpinWheelRequest req, CancellationToken ct)
     {
-        try { return Ok(await engine.SelectNextDrawerAsync(code, ct)); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-    }
-
-    [HttpPost("pick-slot")]
-    public async Task<IActionResult> PickSlot(
-        string code, [FromBody] DrawerPickRequest req, CancellationToken ct)
-    {
-        try { return Ok(await engine.OnDrawerPicksSlotAsync(code, req, ct)); }
+        try { return Ok(await engine.SpinWheelAsync(code, req.HostId, ct)); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 
@@ -51,21 +44,6 @@ public class GameController(IGameEngineService engine) : ControllerBase
         string code, [FromBody] StealAttemptRequest req, CancellationToken ct)
     {
         try { return Ok(await engine.RecordStealAttemptAsync(code, req, ct)); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-    }
-
-    [HttpPost("resolve-steal")]
-    public async Task<IActionResult> ResolveSteal(string code, CancellationToken ct)
-    {
-        try { return Ok(await engine.ResolveStealAsync(code, ct)); }
-        catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
-    }
-
-    [HttpPost("mark")]
-    public async Task<IActionResult> Mark(
-        string code, [FromBody] MarkNumberRequest req, CancellationToken ct)
-    {
-        try { return Ok(new { marked = await engine.MarkNumberAsync(code, req, ct) }); }
         catch (InvalidOperationException ex) { return BadRequest(new { error = ex.Message }); }
     }
 

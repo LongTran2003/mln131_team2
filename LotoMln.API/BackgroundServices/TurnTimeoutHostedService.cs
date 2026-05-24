@@ -1,4 +1,3 @@
-﻿using LotoMln.DataAccess.IRepositories;
 using LotoMln.Models.DTOs;
 using LotoMln.Models.Enums;
 using LotoMln.Services.IServices;
@@ -6,12 +5,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LotoMln.API.BackgroundServices;
 
-/// <summary>
-/// Tick mỗi 500ms, tìm GameState đã quá deadline ở 3 phase:
-/// - DrawerSelecting: drawer không pick → skip sang drawer kế
-/// - DrawerAnswering: drawer không trả lời → treat as wrong → steal mode
-/// - Revealing: hết 5s "đang kiểm tra" → bắt đầu lượt mới
-/// </summary>
+// Tick every 500ms, handle expired deadlines:
+// - DrawerAnswering: no answer in time → treat as wrong → steal mode
+// - Stealing: steal window closed → resolve steal
+// - Revealing: 5s display over → back to Idle
 public class TurnTimeoutHostedService(
     IServiceProvider services,
     ILogger<TurnTimeoutHostedService> logger) : BackgroundService
@@ -35,9 +32,9 @@ public class TurnTimeoutHostedService(
 
         var now = DateTime.UtcNow;
         var expired = await db.GameStates
-            .Where(g => (g.Phase == GamePhase.DrawerSelecting
-                      || g.Phase == GamePhase.DrawerAnswering
-                      || g.Phase == GamePhase.Revealing)        // ← thêm
+            .Where(g => (g.Phase == GamePhase.DrawerAnswering
+                      || g.Phase == GamePhase.Stealing
+                      || g.Phase == GamePhase.Revealing)
                         && g.Deadline != null && g.Deadline < now)
             .ToListAsync(ct);
 
@@ -45,30 +42,24 @@ public class TurnTimeoutHostedService(
         {
             try
             {
-                if (state.Phase == GamePhase.DrawerSelecting)
+                if (state.Phase == GamePhase.DrawerAnswering)
                 {
-                    // Drawer không pick slot trong 15s → skip
-                    logger.LogInformation("Room {Code}: drawer {Did} timeout selecting → skip",
-                        state.RoomCode, state.CurrentDrawerId);
-                    await engine.SelectNextDrawerAsync(state.RoomCode, ct);
-                    // SelectNextDrawerAsync đã notify TurnStarted bên trong → KHÔNG notify lại
-                }
-                else if (state.Phase == GamePhase.DrawerAnswering)
-                {
-                    // Drawer không trả lời → treat as wrong (AnswerIndex = -1)
-                    logger.LogInformation("Room {Code}: drawer {Did} timeout answering → steal mode",
+                    logger.LogInformation("Room {Code}: drawer {Did} timeout → steal mode",
                         state.RoomCode, state.CurrentDrawerId);
                     var dummy = new SubmitAnswerRequest(state.CurrentDrawerId!.Value, -1);
                     await engine.OnDrawerAnswersAsync(state.RoomCode, dummy, ct);
-                    // OnDrawerAnswersAsync đã notify AnswerSubmitted + StealModeStarted bên trong
+                }
+                else if (state.Phase == GamePhase.Stealing)
+                {
+                    logger.LogInformation("Room {Code}: steal window closed → resolving",
+                        state.RoomCode);
+                    await engine.ResolveStealAsync(state.RoomCode, ct);
                 }
                 else if (state.Phase == GamePhase.Revealing)
                 {
-                    // ← NHÁNH MỚI: Revealing 5s xong → next turn
-                    logger.LogInformation("Room {Code}: revealing ended → advance to next turn",
+                    logger.LogInformation("Room {Code}: revealing ended → Idle",
                         state.RoomCode);
-                    await engine.SelectNextDrawerAsync(state.RoomCode, ct);
-                    // SelectNextDrawerAsync đã notify TurnStarted bên trong
+                    await engine.AdvanceToIdleAsync(state.RoomCode, ct);
                 }
             }
             catch (Exception ex)
